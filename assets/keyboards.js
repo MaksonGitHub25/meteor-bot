@@ -58,16 +58,12 @@ const childCanSwimmingKeyboard = [
   ]
 ];
 
-const simpleMessageOption = {
-  reply_markup: {
-    inline_keyboard: [
-      [
-        { text: '◀️', callback_data: 'stepBack' },
-        { text: '⏪', callback_data: 'resetMessage' }
-      ]
-    ]
-  }
-};
+const simpleMessageOption = [
+  [
+    { text: '◀️', callback_data: 'stepBack' },
+    { text: '⏪', callback_data: 'resetMessage' }
+  ]
+];
 
 module.exports = {
   startKeyboard,
