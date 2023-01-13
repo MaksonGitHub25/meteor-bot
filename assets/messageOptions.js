@@ -54,15 +54,15 @@ const messages = {
         keyboard: simpleMessageOption
     },
     'age 0,5-3': {
-        text: 'В нас є групові заняття немовлят разом з мамою або татом\nПодивитись розклад та записатись можна тут ↓\n/посилання /',
+        text: 'В нас є групові заняття немовлят разом з мамою або татом\nПодивитись розклад та записатись можна <a href="https://my.lucky.fitness/calendar_forms/main_form?organization=1760&lang=uk&trainer=true&show_timeGrid=true&type_view=1&use_insert_lesson=true&lesson_class=3401&new_clients=false&payment_systems=true&castom_css=&select_organization=false">тут</a>',
         keyboard: simpleMessageOption
     },
     'age 3-5': {
-        text: 'В нас є групові заняття в малій вані глибиною 60 см, в групі до 5 діточок\nПодивитись розклад та записатись можна тут ↓\n/посилання /',
+        text: 'В нас є групові заняття в малій вані глибиною 60 см, в групі до 5 діточок\nПодивитись розклад та записатись можна <a href="https://my.lucky.fitness/calendar_forms/main_form?organization=1760&lang=uk&trainer=true&show_timeGrid=true&type_view=1&use_insert_lesson=true&lesson_class=3401&new_clients=false&payment_systems=true&castom_css=&select_organization=false">тут</a>',
         keyboard: simpleMessageOption
     },
     'age 5-7': {
-        text: 'Пропонуємо групові заняття в малій ванні\nПодивитись розклад та записатись можна тут ↓\n/посилання /',
+        text: 'Пропонуємо групові заняття в малій ванні\nПодивитись розклад та записатись можна <a href="https://my.lucky.fitness/calendar_forms/main_form?organization=1760&lang=uk&trainer=true&show_timeGrid=true&type_view=1&use_insert_lesson=true&lesson_class=3401&new_clients=false&payment_systems=true&castom_css=&select_organization=false">тут</a>',
         keyboard: simpleMessageOption
     },
     'age 7-14': {
@@ -70,11 +70,11 @@ const messages = {
         keyboard: childCanSwimmingKeyboard
     },
     childSwimmingYes: {
-        text: 'Пропонуємо групові заняття у великій ванні\nПодивитись розклад та записатись можна тут ↓\n/посилання /',
+        text: 'Пропонуємо групові заняття у великій ванні\nПодивитись розклад та записатись можна <a href="https://my.lucky.fitness/calendar_forms/main_form?organization=1760&lang=uk&trainer=true&show_timeGrid=true&type_view=1&use_insert_lesson=true&lesson_class=3401&new_clients=false&payment_systems=true&castom_css=&select_organization=false">тут</a>',
         keyboard: simpleMessageOption
     },
     childSwimmingNo: {
-        text: 'Пропонуємо групові заняття в малій ванні\nПодивитись розклад та записатись можна тут ↓\n/посилання /',
+        text: 'Пропонуємо групові заняття в малій ванні\nПодивитись розклад та записатись можна <a href="https://my.lucky.fitness/calendar_forms/main_form?organization=1760&lang=uk&trainer=true&show_timeGrid=true&type_view=1&use_insert_lesson=true&lesson_class=3401&new_clients=false&payment_systems=true&castom_css=&select_organization=false">тут</a>',
         keyboard: simpleMessageOption
     },
 };

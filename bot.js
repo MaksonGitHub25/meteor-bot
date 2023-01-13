@@ -3,6 +3,7 @@ const messages = require('./assets/messageOptions');
 const MongoClient = require('mongodb').MongoClient;
 
 const TelegramBot = require('node-telegram-bot-api');
+const { ObjectId } = require('mongodb');
 const TOKEN = process.env.TOKEN;
 
 const mongodbURL = process.env.mongodbURL;
@@ -14,223 +15,275 @@ const bot = new TelegramBot(TOKEN, { polling: true });
 
 // -------------------------------------------------------------
 
+// сделать флексовый метод для пуша, чтоб нормально пушилось
+
 bot.onText(/\/start/, async msg => {
-  const chatId = msg.chat.id;
+    const chatId = msg.chat.id;
 
-  saveClientInDB(msg);
+    const client = {
+        id: msg.from.id,
+        name: msg.from.first_name,
+        username: msg.from.username || msg.from.id
+    };
 
-  history.splice(0);
-  botQueries++;
-  queryMessageId = msg.message_id + 3;
+    const message = {
+        text: msg.text,
+        from_id: msg.from.id,
+        from_name: msg.from.username || msg.from.id,
+        date: new Date().toLocaleString(msg.date)
+    };
 
-  const message = messages['startMessage'];
+    await saveClientInDB(client);
+    await saveNewMessage(message);
 
-  await bot.sendMessage(chatId, 'Вас вітає бот босейну "Метеор" :)');
-  await bot.sendMessage(
-    chatId,
-    'Я можу Вам розповісти про наші послуги та допомогти з вибором'
-  );
-  await bot.sendMessage(chatId, message.text, {
-    reply_markup: { inline_keyboard: message.keyboard }
-  });
+    history.splice(0);
+    botQueries++;
+    queryMessageId = msg.message_id + 3;
+
+    const sendingMessage = messages['startMessage'];
+
+    // await bot.sendMessage(chatId, 'Вас вітає бот босейну "Метеор" :)');
+    // await bot.sendMessage(
+    //     chatId,
+    //     'Я можу Вам розповісти про наші послуги та допомогти з вибором'
+    // );
+    // await bot.sendMessage(chatId, sendingMessage.text, {
+    //     reply_markup: { inline_keyboard: sendingMessage.keyboard }
+    // });
 });
 
 bot.on('callback_query', query => {
-  const chatId = query.message.chat.id;
-  let queryAnswer = query.data;
+    const chatId = query.message.chat.id;
+    let queryAnswer = query.data;
 
-  history.push(queryAnswer);
-  botQueries++;
+    history.push(queryAnswer);
+    botQueries++;
 
-  handleCallbackQuery(chatId, queryAnswer);
+    handleCallbackQuery(chatId, queryAnswer);
 });
 
 async function handleCallbackQuery(chatId, queryAnswer) {
-  const messageOption = {
-    chat_id: chatId,
-    message_id: queryMessageId
-  };
+    const messageOption = {
+        chat_id: chatId,
+        message_id: queryMessageId
+    };
 
-  if (history.length === 0) {
-    queryAnswer = 'startMessage';
-  }
+    if (history.length === 0) {
+        queryAnswer = 'startMessage';
+    }
 
-  if (queryAnswer === undefined) {
-    queryAnswer = history[history.length - 1];
+    if (queryAnswer === undefined) {
+        queryAnswer = history[history.length - 1];
 
-    handleCallbackQuery(chatId, queryAnswer);
-    return;
-  }
+        handleCallbackQuery(chatId, queryAnswer);
+        return;
+    }
 
-  if (queryAnswer === 'stepBack') {
-    history.splice(history.length - 2, 2);
-    queryAnswer = history[history.length - 1];
+    if (queryAnswer === 'stepBack') {
+        history.splice(history.length - 2, 2);
+        queryAnswer = history[history.length - 1];
 
-    handleCallbackQuery(chatId, queryAnswer);
-    return;
-  }
+        handleCallbackQuery(chatId, queryAnswer);
+        return;
+    }
 
-  if (queryAnswer === 'resetMessage') {
-    history.splice(0);
+    if (queryAnswer === 'resetMessage') {
+        history.splice(0);
 
-    handleCallbackQuery(chatId, queryAnswer);
-    return;
-  }
+        handleCallbackQuery(chatId, queryAnswer);
+        return;
+    }
 
-  if (queryAnswer === 'adultGroupLesson') {
-    Object.assign(messageOption, { parse_mode: 'HTML' });
-  }
+    if (shouldAddHTMLParse(queryAnswer)) {
+        Object.assign(messageOption, { parse_mode: 'HTML' });
+    }
 
-  const message = messages[queryAnswer];
-  await bot.editMessageText(message.text, messageOption);
-  await bot.editMessageReplyMarkup({ inline_keyboard: message.keyboard }, messageOption);
+    const message = messages[queryAnswer];
+    await bot.editMessageText(message.text, messageOption);
+    await bot.editMessageReplyMarkup({ inline_keyboard: message.keyboard }, messageOption);
 }
 
-function saveClientInDB(message) {
-  const client = {
-    id: message.from.id,
-    name: message.from.first_name,
-    username: message.from.username || message.from.id
-  };
+function shouldAddHTMLParse(answer) {
+    if (answer === 'adultGroupLesson' ||
+        answer === 'age 0,5-3' ||
+        answer === 'age 3-5' ||
+        answer === 'age 5-7' ||
+        answer === 'childSwimmingYes' ||
+        answer === 'childSwimmingNo') {
+        return true;
+    }
+}
 
-  MongoClient.connect(mongodbURL, (err, db) => {
-    if (err) throw err;
+async function saveClientInDB(client) {
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
 
-    const dbo = db.db('meteorBot');
-    let users;
+        const dbo = db.db('meteorBot');
+        let users;
 
-    dbo.collection('users').find({}).toArray((err, result) => {
-      if (err) throw err;
+        dbo.collection('users').find({}).toArray((err, result) => {
+            if (err) throw err;
 
-      users = result;
+            users = result;
 
-      const isRepite = users.some(user => user.id === client.id);
-      if (!isRepite) {
-        dbo.collection('users').insertOne(client, async (err, res) => {
-          if (err) throw err;
-          console.log('1 document inserted');
-          db.close();
+            const isRepite = users.some(user => user.id === client.id);
+            if (!isRepite) {
+                dbo.collection('users').insertOne(client, async (err, res) => {
+                    if (err) throw err;
+                    console.log('1 document inserted');
+                    db.close();
+                });
+            }
         });
-      }
     });
-  });
 }
 
-bot.onText(/\/show_db/, (msg) => {
-  const chatId = msg.chat.id;
+async function saveNewMessage(message) {
 
-  MongoClient.connect(mongodbURL, (err, db) => {
-    if (err) throw err;
+    /*
 
-    const dbo = db.db('meteorBot');
+    fucking idea for solution
 
-    dbo.collection('users').find({}).toArray((err, res) => {
-      if (err) throw err;
-
-      console.log(res);
-      db.close();
+    emitter.on('checkUser', () => {
+        emitter.emit('saveMessage', 'method');
     });
-  });
+    emitter.on('saveMessage', (method) => {
+        console.log(method);
+    });
+    */
+
+
+    isUserAlreadyRegistred(message);
+    saveMessageInDB(message, 1);
+}
+
+async function saveMessageInDB(message, method) {
+    console.log('start writing new message');
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
+
+        const dbo = db.db('meteorBot');
+
+        const username = message.from_name;
+
+        console.log('[methodOfPushInSave]', method);
+
+        // dbo.collection('messages').updateOne(
+        //     { [`${username}.from_name`]: username },
+        //     { [`$${method}`]: { [`${username}`]: [message] } },
+        //     { upsert: true }
+        // );
+    });
+}
+
+async function setupUserInDB(message) {
+    console.log('start create new user');
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
+
+        const dbo = db.db('meteorBot');
+
+        const username = message.from_name;
+
+        dbo.collection('messages').insertOne({ [username]: [message] }, (err, obj) => {
+            if (err) throw err;
+            // console.log('Add new user');
+            console.log('create new user in setup');
+
+            db.close();
+        });
+    });
+
+    return true;
+}
+
+async function isUserAlreadyRegistred(message) {
+    console.log('start check');
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
+
+        const dbo = db.db('meteorBot');
+
+        const username = message.from_name;
+
+        dbo.collection('messages').find({ [`${username}.0.from_name`]: username }).toArray((err, res) => {
+            if (err) throw err;
+            // console.log(res);
+            console.log('end of check');
+
+            const methodOfPush = res.length === 0 ? 'set' : 'push'
+            console.log('[methodOfPushInCheck]', methodOfPush);
+
+            return methodOfPush;
+
+            // if (res.length === 0) return 'set'
+            // else if (res.length > 0) return 'push';
+        });
+    });
+}
+
+bot.onText(/\/show_db_messages/, (msg) => {
+    const chatId = msg.chat.id;
+
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
+
+        const dbo = db.db('meteorBot');
+
+        dbo.collection('messages').find({}).toArray((err, res) => {
+            if (err) throw err;
+
+            bot.sendMessage(chatId, JSON.stringify(res) || 'nothing here');
+            db.close();
+        });
+    });
 });
 
-bot.onText(/\/clear_db/, (msg) => {
-  MongoClient.connect(mongodbURL, (err, db) => {
-    if (err) throw err;
+bot.onText(/\/clear_db_users/, (msg) => {
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
 
-    const dbo = db.db('meteorBot');
+        const dbo = db.db('meteorBot');
 
-    dbo.collection('users').deleteMany({ username: /[a-z]/gmi }, (err, obj) => {
-      if (err) throw err;
+        dbo.collection('users').deleteMany({ username: /[a-z]/gmi }, (err, obj) => {
+            if (err) throw err;
 
-      console.log(`deleted ${obj.deletedCount} document`);
-      db.close();
+            console.log(`deleted ${obj.deletedCount} document`);
+            db.close();
+        });
     });
-  });
 });
 
-//? надо блять поставить аву боту, а то я устал смотреть на букву М
+bot.onText(/\/clear_db_messages/, (msg) => {
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
 
-// oldCode
-// case 'startMessage':
-    //   await bot.editMessageText('Ви підбираєте послуги для:', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: startKeyboard }, messageOption);
-    //   break;
+        const dbo = db.db('meteorBot');
 
-    // case 'adult':
-    //   await bot.editMessageText('Для дорослих в нас є:', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: adultKeyboard }, messageOption);
-    //   break;
+        dbo.collection('messages').deleteMany({ $all: Object }, (err, obj) => {
+            if (err) throw err;
 
-    // case 'child':
-    //   await bot.editMessageText('Для дітей в нас є:', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: childKeyboard }, messageOption);
-    //   break;
+            console.log(`deleted ${obj.deletedCount} document`);
+            db.close();
+        });
+    });
+});
 
-    // case 'adultSelfSwimming':
-    //   await bot.editMessageText('Ви можете придбати разове відвідування або абонемент на місяць\nПідказати вартість?', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: adultSelfSwimmingKeyboard }, messageOption);
-    //   break;
+bot.onText(/\/delete_document (.+)/, (msg, match) => {
+    const idObject = match[1];
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
 
-    // case 'adultIndividualLesson':
-    //   await bot.editMessageText('Тренер навчить Вас плавати або вдосканале Ваші навички, вартість одного заняття 700,00 грн\nПодзвоніть нам, ми підберемо Вам тренера та зручний час :)', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
+        const dbo = db.db('meteorBot');
 
-    // case 'adultGroupLesson':
-    //   await bot.editMessageText(`Подивитись розклад та записатись можна <a href='https://my.lucky.fitness/calendar_forms/main_form?organization=1760&lang=ru&trainer=true&show_timeGrid=true&type_view=0&use_insert_lesson=false&lesson_class=3832&new_clients=false&payment_systems=false&castom_css=&select_organization=false'>тут</a>`, { ...messageOption, parse_mode: 'HTML' });
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
+        dbo.collection('messages').deleteOne({ "_id": ObjectId(`${idObject}`) }, (err, obj) => {
+            if (err) throw err;
+            console.log(`deleted ${obj.deletedCount} document`);
+            db.close();
+        });
+    });
+});
 
-    // case 'adultSelfSwimmingYes':
-    //   await bot.editMessageText('Разове відвідування - 300,00 грн. При наявності пенсійного посвідчення - 200,00 грн.\n\nАбонемент на місяць:\n4 відвідування - 1100,00 грн, 8 відвідувань - 2000,00 грн', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
-
-    // case 'adultSelfSwimmingNo':
-    //   await bot.editMessageText('еще не придумала куда его перевести', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
-
-    // case 'childGroupLesson':
-    //   await bot.editMessageText('Який вік Вашої дитини?', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: childGroupLesson }, messageOption);
-    //   break;
-
-    // case 'childIndividualLesson':
-    //   await bot.editMessageText('Тренер навчить Вашу дитину плавати або вдосканале навички, вартість одного заняття 700,00 грн\nПодзвоніть нам, ми підберемо Вам тренера та зручний час :)', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
-
-    // case 'childSelfSwimming':
-    //   await bot.editMessageText('null null null null null', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
-
-    // case 'age 0,5-3':
-    //   await bot.editMessageText('В нас є групові заняття немовлят разом з мамою або татом\nПодивитись розклад та записатись можна тут ↓\n/посилання /', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
-
-    // case 'age 3-5':
-    //   await bot.editMessageText('В нас є групові заняття в малій вані глибиною 60 см, в групі до 5 діточок\nПодивитись розклад та записатись можна тут ↓\n/посилання /', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
-
-    // case 'age 5-7':
-    //   await bot.editMessageText('Пропонуємо групові заняття в малій ванні\nПодивитись розклад та записатись можна тут ↓\n/посилання /', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
-
-    // case 'age 7-14':
-    //   await bot.editMessageText('Ваша дитина вміє плавати?', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: childCanSwimmingKeyboard }, messageOption);
-    //   break;
-
-    // case 'childSwimmingYes':
-    //   await bot.editMessageText('Пропонуємо групові заняття у великій ванні\nПодивитись розклад та записатись можна тут ↓\n/посилання /', messageOption);
-    //   await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
-    //   break;
-
-    // case 'childSwimmingNo':
-    // await bot.editMessageText('Пропонуємо групові заняття в малій ванні\nПодивитись розклад та записатись можна тут ↓\n/посилання /', messageOption);
-    // await bot.editMessageReplyMarkup({ inline_keyboard: simpleMessageOption }, messageOption);
+// bot.on('message', msg => {
+//     saveMessageInDB(msg);
+// });
