@@ -1,23 +1,23 @@
 require('dotenv').config();
 const messages = require('./assets/messageOptions');
+const fs = require('fs');
+
 const MongoClient = require('mongodb').MongoClient;
+const { ObjectId } = require('mongodb');
+const mongodbURL = process.env.mongodbURL;
 
 const TelegramBot = require('node-telegram-bot-api');
-const { ObjectId } = require('mongodb');
 const TOKEN = process.env.TOKEN;
 
-const mongodbURL = process.env.mongodbURL;
 const history = [];
 let botQueries = 0;
-let queryMessageId;
+let queryMessageId = 'queryMessageId haven\'t set yet';
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 // -------------------------------------------------------------
 
-// сделать флексовый метод для пуша, чтоб нормально пушилось
-
-bot.onText(/\/start/, async msg => {
+bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
 
     const client = {
@@ -26,56 +26,100 @@ bot.onText(/\/start/, async msg => {
         username: msg.from.username || msg.from.id
     };
 
-    const message = {
-        text: msg.text,
-        from_id: msg.from.id,
-        from_name: msg.from.username || msg.from.id,
-        date: new Date().toLocaleString(msg.date)
-    };
-
-    await saveClientInDB(client);
-    await saveNewMessage(message);
+    saveClientInDB(client);
 
     history.splice(0);
     botQueries++;
-    queryMessageId = msg.message_id + 3;
+
+
+    MongoClient.connect(mongodbURL, (err, db) => {
+        if (err) throw err;
+
+        const dbo = db.db('meteorBot');
+
+        dbo.collection('users').find({ username: msg.from.username }).toArray((err, res) => {
+            if (err) throw err;
+            console.log(res);
+
+            const messageId = res[0].queryMessageId || 'queryMessageId haven\'t set yet';
+            queryMessageId = typeof messageId !== 'number'
+                ? messageId
+                : messageId + 3;
+
+            if (typeof queryMessageId === 'number') {
+                dbo.collection('users').updateOne(
+                    { username: msg.from.username },
+                    { $set: { queryMessageId: queryMessageId } },
+                    { upsert: true }
+                );
+            }
+        });
+    });
+
 
     const sendingMessage = messages['startMessage'];
 
-    // await bot.sendMessage(chatId, 'Вас вітає бот босейну "Метеор" :)');
-    // await bot.sendMessage(
-    //     chatId,
-    //     'Я можу Вам розповісти про наші послуги та допомогти з вибором'
-    // );
-    // await bot.sendMessage(chatId, sendingMessage.text, {
-    //     reply_markup: { inline_keyboard: sendingMessage.keyboard }
-    // });
+    await bot.sendMessage(chatId, 'Вас вітає бот босейну "Метеор" :)');
+    await bot.sendMessage(
+        chatId,
+        'Я можу Вам розповісти про наші послуги та допомогти з вибором'
+    );
+    await bot.sendMessage(chatId, sendingMessage.text, {
+        reply_markup: { inline_keyboard: sendingMessage.keyboard }
+    });
 });
 
-bot.on('callback_query', query => {
+bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
     let queryAnswer = query.data;
 
     history.push(queryAnswer);
     botQueries++;
 
-    handleCallbackQuery(chatId, queryAnswer);
+    const message = {
+        callbackData: queryAnswer,
+        from_id: query.from.id,
+        from_name: query.from.username || query.from.id,
+        date: new Date().toLocaleString(query.message.date)
+    };
+
+    await saveMessageInDB(message);
+    await handleCallbackQuery(query, queryAnswer);
 });
 
-async function handleCallbackQuery(chatId, queryAnswer) {
+async function handleCallbackQuery(query, queryAnswer) {
     const messageOption = {
-        chat_id: chatId,
+        chat_id: query.message.chat.id,
         message_id: queryMessageId
     };
 
+    // MongoClient.connect(mongodbURL, (err, db) => {
+    //     if (err) throw err;
+
+    //     const dbo = db.db('meteorBot');
+
+    //     dbo.collection('users').find({ username: query.from.username }).toArray((err, res) => {
+    //         if (err) throw err;
+    //         console.log(res);
+
+    //         const messageId = res[0].queryMessageId || 'queryMessageId haven\'t set yet';
+    //         queryMessageId = typeof messageId !== 'number'
+    //             ? messageId
+    //             : messageId + 3;
+    //     });
+    // });
+
     if (history.length === 0) {
         queryAnswer = 'startMessage';
+
+        handleCallbackQuery(query, queryAnswer);
+        return;
     }
 
     if (queryAnswer === undefined) {
         queryAnswer = history[history.length - 1];
 
-        handleCallbackQuery(chatId, queryAnswer);
+        handleCallbackQuery(query, queryAnswer);
         return;
     }
 
@@ -83,14 +127,14 @@ async function handleCallbackQuery(chatId, queryAnswer) {
         history.splice(history.length - 2, 2);
         queryAnswer = history[history.length - 1];
 
-        handleCallbackQuery(chatId, queryAnswer);
+        handleCallbackQuery(query, queryAnswer);
         return;
     }
 
     if (queryAnswer === 'resetMessage') {
         history.splice(0);
 
-        handleCallbackQuery(chatId, queryAnswer);
+        handleCallbackQuery(query, queryAnswer);
         return;
     }
 
@@ -98,9 +142,17 @@ async function handleCallbackQuery(chatId, queryAnswer) {
         Object.assign(messageOption, { parse_mode: 'HTML' });
     }
 
+    if (queryMessageId === 'queryMessageId haven\'t set yet') {
+        queryAnswer = 'startMessage';
+
+        handleCallbackQuery(query, queryAnswer);
+        return;
+    }
+
     const message = messages[queryAnswer];
-    await bot.editMessageText(message.text, messageOption);
-    await bot.editMessageReplyMarkup({ inline_keyboard: message.keyboard }, messageOption);
+    console.log(messageOption);
+    // await bot.editMessageText(message.text, messageOption);
+    // await bot.editMessageReplyMarkup({ inline_keyboard: message.keyboard }, messageOption);
 }
 
 function shouldAddHTMLParse(answer) {
@@ -113,6 +165,8 @@ function shouldAddHTMLParse(answer) {
         return true;
     }
 }
+
+// ------------------------------------------
 
 async function saveClientInDB(client) {
     MongoClient.connect(mongodbURL, (err, db) => {
@@ -138,67 +192,7 @@ async function saveClientInDB(client) {
     });
 }
 
-async function saveNewMessage(message) {
-
-    /*
-
-    fucking idea for solution
-
-    emitter.on('checkUser', () => {
-        emitter.emit('saveMessage', 'method');
-    });
-    emitter.on('saveMessage', (method) => {
-        console.log(method);
-    });
-    */
-
-
-    isUserAlreadyRegistred(message);
-    saveMessageInDB(message, 1);
-}
-
-async function saveMessageInDB(message, method) {
-    console.log('start writing new message');
-    MongoClient.connect(mongodbURL, (err, db) => {
-        if (err) throw err;
-
-        const dbo = db.db('meteorBot');
-
-        const username = message.from_name;
-
-        console.log('[methodOfPushInSave]', method);
-
-        // dbo.collection('messages').updateOne(
-        //     { [`${username}.from_name`]: username },
-        //     { [`$${method}`]: { [`${username}`]: [message] } },
-        //     { upsert: true }
-        // );
-    });
-}
-
-async function setupUserInDB(message) {
-    console.log('start create new user');
-    MongoClient.connect(mongodbURL, (err, db) => {
-        if (err) throw err;
-
-        const dbo = db.db('meteorBot');
-
-        const username = message.from_name;
-
-        dbo.collection('messages').insertOne({ [username]: [message] }, (err, obj) => {
-            if (err) throw err;
-            // console.log('Add new user');
-            console.log('create new user in setup');
-
-            db.close();
-        });
-    });
-
-    return true;
-}
-
-async function isUserAlreadyRegistred(message) {
-    console.log('start check');
+function saveMessageInDB(message) {
     MongoClient.connect(mongodbURL, (err, db) => {
         if (err) throw err;
 
@@ -208,51 +202,64 @@ async function isUserAlreadyRegistred(message) {
 
         dbo.collection('messages').find({ [`${username}.0.from_name`]: username }).toArray((err, res) => {
             if (err) throw err;
-            // console.log(res);
-            console.log('end of check');
 
-            const methodOfPush = res.length === 0 ? 'set' : 'push'
-            console.log('[methodOfPushInCheck]', methodOfPush);
+            const method = res.length === 0 ? 'set' : 'push';
+            const messageForPush = method === 'set' ? [message] : message;
 
-            return methodOfPush;
-
-            // if (res.length === 0) return 'set'
-            // else if (res.length > 0) return 'push';
+            dbo.collection('messages').updateOne(
+                { [`${username}.from_name`]: username },
+                { [`$${method}`]: { [`${username}`]: messageForPush } },
+                { upsert: true }
+            );
         });
     });
 }
 
-bot.onText(/\/show_db_messages/, (msg) => {
-    const chatId = msg.chat.id;
+bot.on('message', (msg) => {
+    const message = {
+        text: msg.text,
+        from_id: msg.from.id,
+        from_name: msg.from.username || msg.from.id,
+        date: new Date().toLocaleString(msg.date)
+    };
 
+    saveMessageInDB(message);
+});
+
+// ------------------------------------------
+
+async function readQueryMessageId(username) {
+    console.log('start read');
     MongoClient.connect(mongodbURL, (err, db) => {
         if (err) throw err;
 
         const dbo = db.db('meteorBot');
 
-        dbo.collection('messages').find({}).toArray((err, res) => {
+        dbo.collection('users').find({ username: username }).toArray((err, res) => {
             if (err) throw err;
+            console.log(res);
 
-            bot.sendMessage(chatId, JSON.stringify(res) || 'nothing here');
-            db.close();
+            return res[0].queryMessageId || 'queryMessageId haven\'t set yet';
         });
     });
-});
+}
 
-bot.onText(/\/clear_db_users/, (msg) => {
+function writeQueryMessageId(username, queryMessageId) {
+    console.log('start write');
     MongoClient.connect(mongodbURL, (err, db) => {
         if (err) throw err;
 
         const dbo = db.db('meteorBot');
 
-        dbo.collection('users').deleteMany({ username: /[a-z]/gmi }, (err, obj) => {
-            if (err) throw err;
-
-            console.log(`deleted ${obj.deletedCount} document`);
-            db.close();
-        });
+        dbo.collection('users').updateOne(
+            { username: username },
+            { $set: { queryMessageId: queryMessageId } },
+            { upsert: true }
+        );
     });
-});
+}
+
+// ------------------------------------------
 
 bot.onText(/\/clear_db_messages/, (msg) => {
     MongoClient.connect(mongodbURL, (err, db) => {
@@ -283,7 +290,3 @@ bot.onText(/\/delete_document (.+)/, (msg, match) => {
         });
     });
 });
-
-// bot.on('message', msg => {
-//     saveMessageInDB(msg);
-// });

@@ -38,7 +38,7 @@ const messages = {
         keyboard: simpleMessageOption
     },
     adultSelfSwimmingNo: {
-        text: 'еще не придумала куда его перевести',
+        text: '* В разработке *',
         keyboard: simpleMessageOption
     },
     childGroupLesson: {
@@ -50,7 +50,7 @@ const messages = {
         keyboard: simpleMessageOption
     },
     childSelfSwimming: {
-        text: 'null null null null null',
+        text: '* В разработке *',
         keyboard: simpleMessageOption
     },
     'age 0,5-3': {
