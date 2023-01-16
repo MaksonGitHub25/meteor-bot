@@ -124,39 +124,6 @@ bot.on('message', (msg) => {
 
 // ------------------------------------------
 
-// async function readQueryMessageId(username) {
-//     console.log('start read');
-//     MongoClient.connect(mongodbURL, (err, db) => {
-//         if (err) throw err;
-
-//         const dbo = db.db('meteorBot');
-
-//         dbo.collection('users').find({ username: username }).toArray((err, res) => {
-//             if (err) throw err;
-//             console.log(res);
-
-//             return res[0].queryMessageId || 'queryMessageId haven\'t set yet';
-//         });
-//     });
-// }
-
-// function writeQueryMessageId(username, queryMessageId) {
-//     console.log('start write');
-//     MongoClient.connect(mongodbURL, (err, db) => {
-//         if (err) throw err;
-
-//         const dbo = db.db('meteorBot');
-
-//         dbo.collection('users').updateOne(
-//             { username: username },
-//             { $set: { queryMessageId: queryMessageId } },
-//             { upsert: true }
-//         );
-//     });
-// }
-
-// ------------------------------------------
-
 bot.onText(/\/clear_db_messages/, (msg) => {
     MongoClient.connect(mongodbURL, (err, db) => {
         if (err) throw err;
@@ -184,8 +151,3 @@ bot.onText(/\/delete_document (.+)/, (msg, match) => {
         });
     });
 });
-
-// bot.on('polling_error', (err) => {
-    // bot.stopPolling();
-    // bot.startPolling();
-// });
